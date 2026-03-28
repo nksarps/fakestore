@@ -1,0 +1,1 @@
+{"uuid":"c1969a6d-ee0b-497e-8843-a4c2797da3db","name":"POST /auth/login returns token for valid credentials","children":["ed2aad71-0043-47b3-be5e-52aa868ef694"],"befores":[],"afters":[],"start":1774695877702,"stop":1774695878264}
