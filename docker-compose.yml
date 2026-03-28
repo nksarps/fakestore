@@ -1,0 +1,9 @@
+services:
+  fakestore-allure:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fakestore-allure
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
