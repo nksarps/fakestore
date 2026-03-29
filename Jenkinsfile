@@ -39,6 +39,8 @@ pipeline {
             steps {
                 script {
                     sh """
+                        mkdir -p ./target
+
                         docker create --name ${CONTAINER_NAME} ${IMAGE_NAME}:${BUILD_NUMBER}
 
                         # Surefire XML results for JUnit plugin
@@ -84,7 +86,8 @@ pipeline {
                 keepAll              : true,
                 reportDir            : 'target/allure-html',
                 reportFiles          : 'index.html',
-                reportName           : 'Allure Report'
+                reportName           : 'Allure Report',
+                reportTitles         : 'Allure Report'
             ])
 
             // Clean up the CI image to avoid disk bloat
