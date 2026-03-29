@@ -89,8 +89,14 @@ pipeline {
                     *BUILD PASSED* :white_check_mark:
                     *Job:* ${env.JOB_NAME}
                     *Build:* #${env.BUILD_NUMBER}
-                    *Report:* ${env.BUILD_URL}Allure_20Report
+                    *Allure Report:* ${env.BUILD_URL}Allure_Report/
                 """.stripIndent().trim()
+            )
+
+            mail(
+                to: 'nksarps@gmail.com',
+                subject: "PASSED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Build passed.\n\nJob: ${env.JOB_NAME}\nBuild: #${env.BUILD_NUMBER}\nAllure Report: ${env.BUILD_URL}Allure_Report/"
             )
         }
 
@@ -103,20 +109,14 @@ pipeline {
                     *Job:* ${env.JOB_NAME}
                     *Build:* #${env.BUILD_NUMBER}
                     *Logs:* ${env.BUILD_URL}console
+                    *Allure Report:* ${env.BUILD_URL}Allure_Report/
                 """.stripIndent().trim()
             )
 
-            // Email notification on failure
             mail(
                 to: 'nksarps@gmail.com',
                 subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    Build failed.
-
-                    Job:   ${env.JOB_NAME}
-                    Build: #${env.BUILD_NUMBER}
-                    Logs:  ${env.BUILD_URL}console
-                """.stripIndent().trim()
+                body: "Build failed.\n\nJob: ${env.JOB_NAME}\nBuild: #${env.BUILD_NUMBER}\nLogs: ${env.BUILD_URL}console\nAllure Report: ${env.BUILD_URL}Allure_Report/"
             )
         }
 
