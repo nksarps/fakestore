@@ -1,0 +1,1 @@
+{"uuid":"d782b9a1-2805-4e86-80ef-80ef7637341a","name":"POST /auth/login rejects empty credentials","children":["7c247e8a-2607-4250-b7a6-204f7396b5a5"],"befores":[],"afters":[],"start":1774695751044,"stop":1774695751461}

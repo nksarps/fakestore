@@ -1,0 +1,18 @@
+.git
+.gitignore
+.github
+.idea
+.vscode
+.allure
+target
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+.env.*
+
+# Docs and build outputs not needed for container test run
+*.iml

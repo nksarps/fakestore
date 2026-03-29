@@ -1,0 +1,1 @@
+{"uuid":"eccc1bfd-ff2a-47fc-a212-e7779d6c6cde","name":"POST /products rejects payload with missing fields","children":["091b4d57-158b-4ad5-a484-a0b340459b1e"],"befores":[],"afters":[],"start":1774696313527,"stop":1774696313990}

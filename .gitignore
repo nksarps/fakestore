@@ -20,4 +20,10 @@ buildNumber.properties
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 
+# Customer Markdown files
+AI_BUILD_PROMPT.md
+PROJECT_DESCRIPTION.md
+
+docs-data.json
+
 # End of https://www.toptal.com/developers/gitignore/api/maven
