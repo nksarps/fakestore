@@ -12,15 +12,6 @@ import static io.restassured.RestAssured.given;
  */
 public final class AuthTokenProvider {
     /**
-     * Requests a token using credentials from {@link ApiConfig}.
-     *
-     * @return authentication token string
-     */
-    public static String fetchTokenFromConfigCredentials() {
-        return fetchToken(ApiConfig.getUsername(), ApiConfig.getPassword());
-    }
-
-    /**
      * Requests a token from the auth endpoint using provided credentials.
      *
      * @param username login username
