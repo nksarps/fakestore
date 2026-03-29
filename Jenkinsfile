@@ -25,14 +25,16 @@ pipeline {
         stage('Build & Test (Docker)') {
             steps {
                 script {
-                    // Build the CI image — runs tests and generates Allure report inside.
-                    // The build fails here if tests fail, which is intentional.
-                    sh """
-                        docker build \
-                            --target ci \
-                            --tag ${IMAGE_NAME}:${BUILD_NUMBER} \
-                            .
-                    """
+                    // catchError allows subsequent stages (Extract Reports) to run even
+                    // when tests fail. The overall build result is still set to FAILURE.
+                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                        sh """
+                            docker build \
+                                --target ci \
+                                --tag ${IMAGE_NAME}:${BUILD_NUMBER} \
+                                .
+                        """
+                    }
                 }
             }
         }
