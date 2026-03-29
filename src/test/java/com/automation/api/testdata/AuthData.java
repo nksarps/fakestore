@@ -19,8 +19,4 @@ public final class AuthData {
     public static final int STATUS_BAD_REQUEST = 400;
 
     public static final String AUTH_LOGIN_SCHEMA_PATH = "schemas/auth-login-response-schema.json";
-
-    private AuthData() {
-        // Constants holder
-    }
 }

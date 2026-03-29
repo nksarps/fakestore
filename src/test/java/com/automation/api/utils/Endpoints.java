@@ -36,14 +36,6 @@ public final class Endpoints {
     }
 
     /**
-     * @param category category slug
-     * @return products endpoint by category
-     */
-    public static String productsByCategory(String category) {
-        return PRODUCTS + "/category/" + category;
-    }
-
-    /**
      * @return products categories endpoint
      */
     public static String productCategories() {
@@ -56,23 +48,6 @@ public final class Endpoints {
      */
     public static String cartById(int id) {
         return CARTS + "/" + id;
-    }
-
-    /**
-     * @param userId user identifier
-     * @return carts endpoint by user id
-     */
-    public static String cartsByUserId(int userId) {
-        return CARTS + "/user/" + userId;
-    }
-
-    /**
-     * @param startDate inclusive start date in yyyy-MM-dd
-     * @param endDate inclusive end date in yyyy-MM-dd
-     * @return carts endpoint with date range query
-     */
-    public static String cartsByDateRange(String startDate, String endDate) {
-        return CARTS + "?startdate=" + startDate + "&enddate=" + endDate;
     }
 
     /**

@@ -30,25 +30,4 @@ public final class ApiConfig {
     public static String getAcceptHeader() {
         return ACCEPT_HEADER;
     }
-
-    /**
-     * @return default charset used for request content type.
-     */
-    public static String getCharset() {
-        return CHARSET;
-    }
-
-    /**
-     * @return optional username from environment variable FAKESTORE_USERNAME.
-     */
-    public static String getUsername() {
-        return System.getenv("FAKESTORE_USERNAME");
-    }
-
-    /**
-     * @return optional password from environment variable FAKESTORE_PASSWORD.
-     */
-    public static String getPassword() {
-        return System.getenv("FAKESTORE_PASSWORD");
-    }
 }
