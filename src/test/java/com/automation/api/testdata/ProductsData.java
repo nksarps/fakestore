@@ -4,7 +4,6 @@ package com.automation.api.testdata;
  * Product-specific test constants used across product API tests.
  */
 public final class ProductsData {
-
     public static final int VALID_PRODUCT_ID = 1;
     public static final int INVALID_PRODUCT_ID = 9999;
 
@@ -24,11 +23,6 @@ public final class ProductsData {
 
     public static final int LIMIT = 10;
 
-
     public static final String PRODUCT_SCHEMA_PATH = "schemas/product-schema.json";
     public static final String PRODUCT_CREATE_SCHEMA_PATH = "schemas/product-create-response-schema.json";
-
-    private ProductsData() {
-        // Constants holder
-    }
 }

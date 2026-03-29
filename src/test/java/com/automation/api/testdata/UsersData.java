@@ -4,7 +4,6 @@ package com.automation.api.testdata;
  * User-specific test constants used across user API tests.
  */
 public final class UsersData {
-
     public static final int VALID_USER_ID = 1;
     public static final int INVALID_USER_ID = 9999;
 
@@ -21,13 +20,8 @@ public final class UsersData {
     public static final int STATUS_OK = 200;
     public static final int STATUS_CREATED = 201;
     public static final int STATUS_BAD_REQUEST = 400;
-    public static final int STATUS_INVALID_REQUEST = 400;
     public static final int STATUS_NOT_FOUND = 404;
 
     public static final String USER_SCHEMA_PATH = "schemas/user-schema.json";
     public static final String USER_CREATE_SCHEMA_PATH = "schemas/user-create-response-schema.json";
-
-    private UsersData() {
-        // Constants holder
-    }
 }
