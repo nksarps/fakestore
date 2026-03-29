@@ -24,7 +24,8 @@ The framework is designed to provide:
 - REST Assured 5.5.1
 - Hamcrest 2.2
 - Allure JUnit5 and Allure Maven plugins
-- Docker and Docker Compose (optional report hosting flow)
+- Docker and Docker Compose (local report hosting and CI builds)
+- Jenkins (CI/CD pipeline with Slack and email notifications)
 
 Dependency and plugin versions are centralized in pom.xml.
 
@@ -34,8 +35,9 @@ Dependency and plugin versions are centralized in pom.xml.
 fakestore/
 │
 ├─ pom.xml                          # Maven build configuration & dependencies
-├─ Dockerfile                        # Container image for test execution
-├─ docker-compose.yml                # One-command container orchestration
+├─ Dockerfile                        # Multi-stage container image (ci + serve stages)
+├─ docker-compose.yml                # One-command container orchestration (serve stage)
+├─ Jenkinsfile                       # Declarative Jenkins pipeline definition
 ├─ README.md                         # Project documentation
 ├─ .dockerignore                     # Docker build exclusions
 ├─ .gitignore                        # Git version control exclusions
@@ -299,13 +301,13 @@ Surefire is configured to write Allure result files into:
 
 ## 9. Dockerized Test + Report Hosting Flow
 
-The container flow:
-1. Builds from Maven + Temurin 17 base image
-2. Runs full test suite
-3. Generates Allure HTML report
-4. Serves report via Python HTTP server on port 8080
+The Dockerfile uses a multi-stage build with three stages:
 
-Start containerized flow:
+- `base` — shared foundation, prefetches Maven dependencies and copies source. Used by both stages below.
+- `ci` — used by Jenkins. Runs tests and generates the Allure report, then exits. Build fails if tests fail.
+- `serve` — used by docker compose. Runs tests, generates the Allure report, then hosts it via Python on port 8080.
+
+Start local report hosting flow:
 
 		docker compose up --build
 
@@ -314,7 +316,8 @@ Open report:
 - http://localhost:8080
 
 Important behavior:
-- Report hosting continues even when tests fail, so failures remain inspectable in the generated report.
+- The `serve` stage hosts the report even when tests fail so results remain inspectable.
+- The `ci` stage exits with a non-zero code on test failure so Jenkins marks the build correctly.
 
 ## 10. Configuration and Credentials
 
@@ -353,6 +356,11 @@ If Docker report page is unavailable:
 - Ensure port 8080 is not in use
 - Rebuild image with docker compose up --build
 
+If Jenkins pipeline fails at the Docker build step:
+- Ensure the Jenkins container has Docker socket access (-v /var/run/docker.sock:/var/run/docker.sock)
+- Ensure Docker CLI is installed inside the Jenkins container
+- Check that the jenkins user is in the docker group
+
 ## 12. Extending The Framework
 
 Recommended approach for new endpoints:
@@ -362,16 +370,99 @@ Recommended approach for new endpoints:
 4. Add JSON schema files for new response contracts when applicable
 5. Keep positive and negative tests contract-first with explicit expected status assertions
 
-## 13. CI/CD Integration Notes
+## 13. Jenkins CI/CD Pipeline
 
-Typical CI pipeline steps:
-1. Checkout repository
-2. Setup JDK 17
-3. Run mvn clean test
-4. Run mvn allure:report
-5. Publish target/site/allure-maven-plugin as build artifact
+### 13.1 How the Pipeline Works
 
-This enables historical report inspection and easier debugging of pipeline failures.
+The pipeline uses the `ci` stage of the multi-stage `Dockerfile` to run tests inside Docker:
+
+1. Jenkins checks out the code from the configured Git branches (main, develop, feature/*)
+2. Docker builds the `ci` stage — runs `mvn clean test` and `mvn allure:report` inside the image
+3. A temporary container is created to copy out test artifacts (surefire XML, Allure results, Allure HTML)
+4. JUnit plugin publishes surefire XML results
+5. HTML Publisher plugin publishes the Allure HTML report
+6. Slack and email notifications fire on success or failure
+7. The CI image is cleaned up after each build
+
+### 13.2 Jenkins Job Setup
+
+1. Create a new Pipeline job in Jenkins
+2. Under General, check `GitHub project` and enter your repo URL
+3. Under Build Triggers, check `GitHub hook trigger for GITScm polling`
+4. Under Pipeline, set Definition to `Pipeline script from SCM`
+5. Set SCM to Git and provide your repository URL
+6. Add the following Branch Specifiers (click `Add Branch` for each):
+   - `*/main`
+   - `*/develop`
+   - `*/feature/*`
+7. Set Script Path to `Jenkinsfile`
+8. Save
+
+### 13.3 Webhook Setup (GitHub)
+
+To trigger the pipeline automatically on push:
+
+1. In Jenkins job, check `GitHub hook trigger for GITScm polling` under Build Triggers
+2. In your GitHub repository go to Settings > Webhooks > Add webhook
+3. Set Payload URL to: `http://<your-jenkins-host>:8080/github-webhook/`
+4. Set Content type to `application/json`
+5. Select `Just the push event`
+6. Save
+
+For local Jenkins exposed via ngrok:
+
+		ngrok http 8080
+
+Use the generated ngrok URL as the webhook payload URL.
+
+### 13.4 Slack Notifications Setup
+
+1. Go to api.slack.com/apps and create a new app from scratch
+2. Under OAuth & Permissions add the `chat:write.public` bot scope
+3. Install the app to your workspace and copy the `xoxb-...` Bot User OAuth Token
+4. In Jenkins > Manage Jenkins > Credentials add a Secret Text credential with the token, ID: `slack-bot-token`
+5. Install the Slack Notification plugin in Jenkins
+6. In Jenkins > Manage Jenkins > System, configure the Slack section:
+   - Workspace: your Slack workspace subdomain
+   - Credential: select `slack-bot-token`
+   - Default channel: `#ci-notifications`
+7. Click `Test Connection` to verify
+8. Update `SLACK_CHANNEL` in the Jenkinsfile if using a different channel
+
+### 13.5 Email Notifications Setup
+
+1. In Jenkins > Manage Jenkins > System, configure the `Extended E-mail Notification` section:
+   - SMTP server: `smtp.gmail.com`
+   - SMTP port: `587` with TLS, or `465` with SSL
+   - Add a Username/Password credential with your Gmail address and a Gmail App Password
+2. Generate a Gmail App Password at myaccount.google.com/apppasswords
+3. Update the `to` address in the Jenkinsfile `mail()` step with your real email
+
+### 13.7 Jenkins Container Requirements
+
+The Jenkins container must be started with Docker socket access so the pipeline can run `docker build`:
+
+		docker run -d \
+		  --name jenkins \
+		  -p 8080:8080 \
+		  -p 50000:50000 \
+		  -v jenkins_home:/var/jenkins_home \
+		  -v /var/run/docker.sock:/var/run/docker.sock \
+		  jenkins/jenkins:lts
+
+Docker CLI must also be installed inside the container:
+
+		docker exec -u root jenkins bash -c "apt-get update && apt-get install -y docker.io && usermod -aG docker jenkins"
+		docker restart jenkins
+
+### 13.8 Required Jenkins Plugins
+
+- Git
+- Pipeline
+- HTML Publisher
+- JUnit
+- Slack Notification
+- Email Extension (or Mailer)
 
 ## 14. Current Scope Summary
 
@@ -379,4 +470,4 @@ This enables historical report inspection and easier debugging of pipeline failu
 - Test classes: 13
 - Test methods: 37
 - Schema files: 7
-- Execution modes: Local Maven and Docker Compose hosted report
+- Execution modes: Local Maven, Docker Compose hosted report, Jenkins CI pipeline
