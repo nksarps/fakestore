@@ -25,16 +25,12 @@ pipeline {
         stage('Build & Test (Docker)') {
             steps {
                 script {
-                    // catchError allows subsequent stages (Extract Reports) to run even
-                    // when tests fail. The overall build result is still set to FAILURE.
-                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        sh """
-                            docker build \
-                                --target ci \
-                                --tag ${IMAGE_NAME}:${BUILD_NUMBER} \
-                                .
-                        """
-                    }
+                    sh """
+                        docker build \
+                            --target ci \
+                            --tag ${IMAGE_NAME}:${BUILD_NUMBER} \
+                            .
+                    """
                 }
             }
         }
@@ -42,7 +38,6 @@ pipeline {
         stage('Extract Reports') {
             steps {
                 script {
-                    // Spin up a temporary container just to copy artifacts out.
                     sh """
                         docker create --name ${CONTAINER_NAME} ${IMAGE_NAME}:${BUILD_NUMBER}
 
@@ -55,8 +50,21 @@ pipeline {
                         # Allure HTML report for HTML publisher
                         docker cp ${CONTAINER_NAME}:/app/target/site/allure-maven-plugin ./target/allure-html || true
 
+                        # Test exit code written by the Docker RUN step
+                        docker cp ${CONTAINER_NAME}:/test-exit-code ./test-exit-code || true
+
                         docker rm ${CONTAINER_NAME}
                     """
+
+                    // Fail the build if tests failed, but only after reports are extracted
+                    def testExitFile = 'test-exit-code'
+                    if (fileExists(testExitFile)) {
+                        def testExit = readFile(testExitFile).trim()
+                        if (testExit != '0') {
+                            currentBuild.result = 'FAILURE'
+                            error("Tests failed with exit code ${testExit}")
+                        }
+                    }
                 }
             }
         }
