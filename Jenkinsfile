@@ -25,8 +25,6 @@ pipeline {
         stage('Build & Test (Docker)') {
             steps {
                 script {
-                    // Build the CI image — runs tests and generates Allure report inside.
-                    // The build fails here if tests fail, which is intentional.
                     sh """
                         docker build \
                             --target ci \
@@ -40,8 +38,9 @@ pipeline {
         stage('Extract Reports') {
             steps {
                 script {
-                    // Spin up a temporary container just to copy artifacts out.
                     sh """
+                        mkdir -p ./target
+
                         docker create --name ${CONTAINER_NAME} ${IMAGE_NAME}:${BUILD_NUMBER}
 
                         # Surefire XML results for JUnit plugin
@@ -53,8 +52,21 @@ pipeline {
                         # Allure HTML report for HTML publisher
                         docker cp ${CONTAINER_NAME}:/app/target/site/allure-maven-plugin ./target/allure-html || true
 
+                        # Test exit code written by the Docker RUN step
+                        docker cp ${CONTAINER_NAME}:/test-exit-code ./test-exit-code || true
+
                         docker rm ${CONTAINER_NAME}
                     """
+
+                    // Fail the build if tests failed, but only after reports are extracted
+                    def testExitFile = 'test-exit-code'
+                    if (fileExists(testExitFile)) {
+                        def testExit = readFile(testExitFile).trim()
+                        if (testExit != '0') {
+                            currentBuild.result = 'FAILURE'
+                            error("Tests failed with exit code ${testExit}")
+                        }
+                    }
                 }
             }
         }
@@ -74,7 +86,8 @@ pipeline {
                 keepAll              : true,
                 reportDir            : 'target/allure-html',
                 reportFiles          : 'index.html',
-                reportName           : 'Allure Report'
+                reportName           : 'Allure Report',
+                reportTitles         : 'Allure Report'
             ])
 
             // Clean up the CI image to avoid disk bloat

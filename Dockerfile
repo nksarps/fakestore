@@ -29,11 +29,15 @@ COPY src ./src
 # ===================================================================
 FROM base AS ci
 
+# Run tests and generate report. Always exits 0 so Docker commits the image
+# (and thus the reports). The real test exit code is written to /test-exit-code
+# and read back by Jenkins to determine pass/fail.
 RUN set +e; \
     mvn -B -e clean test; \
     TEST_EXIT=$?; \
     mvn -B allure:report; \
-    exit $TEST_EXIT
+    echo $TEST_EXIT > /test-exit-code; \
+    exit 0
 
 # ===================================================================
 # STAGE 3: serve
