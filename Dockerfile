@@ -1,24 +1,57 @@
-FROM maven:3.9.6-eclipse-temurin-17
+# ===================================================================
+# STAGE 1: base
+# Shared foundation for all stages.
+# Prefetches Maven dependencies and copies source code.
+# Neither runs tests nor starts any server.
+# ===================================================================
+FROM maven:3.9.6-eclipse-temurin-17 AS base
 
-# Install only what is needed to host the generated Allure HTML report.
+WORKDIR /app
+
+# Prefetch dependencies using only pom.xml to leverage Docker layer cache.
+# This layer is invalidated only when pom.xml changes.
+# dependency:resolve is used over dependency:go-offline to avoid strict
+# artifact resolution failures caused by transient network interruptions.
+COPY pom.xml ./
+RUN mvn -B dependency:resolve dependency:resolve-plugins -q || \
+    mvn -B dependency:resolve dependency:resolve-plugins -q
+
+# Copy source — this layer rebuilds only when source files change.
+COPY src ./src
+
+# ===================================================================
+# STAGE 2: ci
+# Jenkins CI target. Runs the full test suite and generates the
+# Allure HTML report, then exits.
+# Usage: docker build --target ci --tag fakestore-ci .
+# The build exits with a non-zero code if tests fail, so Jenkins
+# correctly marks the build as failed.
+# ===================================================================
+FROM base AS ci
+
+RUN set +e; \
+    mvn -B -e clean test; \
+    TEST_EXIT=$?; \
+    mvn -B allure:report; \
+    exit $TEST_EXIT
+
+# ===================================================================
+# STAGE 3: serve
+# Local report hosting target. Runs the full test suite, generates
+# the Allure HTML report, then serves it via Python on port 8080.
+# Usage: docker compose up --build
+# The report is served even when tests fail so results remain
+# inspectable at http://localhost:8080.
+# ===================================================================
+FROM base AS serve
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Copy project files required for build and test execution.
-COPY pom.xml ./
-COPY src ./src
-
-# Prefetch dependencies to speed up later container starts.
-RUN mvn -B -q dependency:go-offline
-
 EXPOSE 8080
 
-# Run tests, generate Allure report, then host the HTML report on port 8080.
-# The report is hosted even when tests fail so results remain inspectable.
 CMD ["bash", "-c", "set +e; \
   mvn -B -e clean test; \
   TEST_EXIT=$?; \
