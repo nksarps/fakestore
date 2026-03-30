@@ -8,7 +8,6 @@ public final class ApiConfig {
     private static final String BASE_URL = "https://fakestoreapi.com";
     private static final String CONTENT_TYPE = "application/json";
     private static final String ACCEPT_HEADER = "application/json";
-    private static final String CHARSET = "UTF-8";
 
     /**
      * @return base URL for the Fake Store API.

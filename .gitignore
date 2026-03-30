@@ -26,4 +26,6 @@ PROJECT_DESCRIPTION.md
 
 docs-data.json
 
+.idea/
+
 # End of https://www.toptal.com/developers/gitignore/api/maven

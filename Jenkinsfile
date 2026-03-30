@@ -1,72 +1,95 @@
-// Runs on pushes to main, develop, and any feature/* branch.
 pipeline {
     agent any
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
         timestamps()
         timeout(time: 30, unit: 'MINUTES')
     }
 
+    triggers {
+        githubPush()
+    }
+
     environment {
-        IMAGE_NAME = "fakestore-ci"
-        CONTAINER_NAME = "fakestore-ci-run"
         SLACK_CHANNEL = "#fakestore-jenkins"
     }
 
     stages {
 
         stage('Checkout') {
+            agent any
             steps {
                 checkout scm
             }
         }
 
-        stage('Build & Test (Docker)') {
+        stage('Test') {
+            agent {
+                docker {
+                    image 'maven:3.9.5-eclipse-temurin-17-alpine'
+                    args '-u root'
+                }
+            }
             steps {
                 script {
-                    sh """
-                        docker build \
-                            --target ci \
-                            --tag ${IMAGE_NAME}:${BUILD_NUMBER} \
-                            .
-                    """
+                    // Catch test failures but continue pipeline
+                    try {
+                        sh 'mvn clean test'
+                    } catch (Exception e) {
+                        echo "Tests failed, but continuing to generate reports..."
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+            post {
+                always {
+                    // Copy any root-level allure-results into target/ as a fallback
+                    sh 'if [ -d allure-results ]; then mkdir -p target/allure-results && cp -r allure-results/* target/allure-results/; fi'
+                    
+                    stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
+                    
+                    // Apply full permissions so Jenkins can clean up root-owned files
+                    sh 'chmod -R 777 ${WORKSPACE}'
                 }
             }
         }
 
-        stage('Extract Reports') {
+        stage('Reports') {
+            agent any
             steps {
-                script {
-                    sh """
-                        mkdir -p ./target
-
-                        docker create --name ${CONTAINER_NAME} ${IMAGE_NAME}:${BUILD_NUMBER}
-
-                        # Surefire XML results for JUnit plugin
-                        docker cp ${CONTAINER_NAME}:/app/target/surefire-reports ./target/surefire-reports || true
-
-                        # Allure raw results for Allure plugin
-                        docker cp ${CONTAINER_NAME}:/app/target/allure-results ./target/allure-results || true
-
-                        # Allure HTML report for HTML publisher
-                        docker cp ${CONTAINER_NAME}:/app/target/site/allure-maven-plugin ./target/allure-html || true
-
-                        # Test exit code written by the Docker RUN step
-                        docker cp ${CONTAINER_NAME}:/test-exit-code ./test-exit-code || true
-
-                        docker rm ${CONTAINER_NAME}
-                    """
-
-                    // Fail the build if tests failed, but only after reports are extracted
-                    def testExitFile = 'test-exit-code'
-                    if (fileExists(testExitFile)) {
-                        def testExit = readFile(testExitFile).trim()
-                        if (testExit != '0') {
-                            currentBuild.result = 'FAILURE'
-                            error("Tests failed with exit code ${testExit}")
-                        }
-                    }
+                // Clean workspace before unstashing (ignore errors from previous root-owned files)
+                sh 'rm -rf ${WORKSPACE}/* ${WORKSPACE}/.[!.]* 2>/dev/null || true'
+                
+                unstash 'results'
+                
+                // Publish Allure report - uses pre-generated report from Maven
+                allure([
+                    includeProperties: false,
+                    jdk: '',
+                    commandline: 'allure',
+                    results: [[path: 'target/allure-results']],
+                    reportBuildPolicy: 'ALWAYS'
+                ])
+                
+                // Publish JUnit XML results
+                junit '**/target/surefire-reports/*.xml'
+                
+                // Publish HTML report for Surefire
+                publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/surefire-reports',
+                    reportFiles: 'index.html',
+                    reportName: 'API Test Reports'
+                ])
+            }
+            post {
+                always {
+                    // Fix permissions so Jenkins can clean up
+                    sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
                 }
             }
         }
@@ -76,61 +99,50 @@ pipeline {
     post {
 
         always {
-            // Publish JUnit XML results
-            junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
+            script {
+                def status = currentBuild.result ?: 'SUCCESS'
+                def isPassed = (status == 'SUCCESS')
+                def color = isPassed ? 'good' : (status == 'UNSTABLE' ? 'warning' : 'danger')
+                def statusEmoji = isPassed ? '✅' : '❌'
+                def statusText = isPassed ? 'PASSED' : 'FAILED'
+                def pipelineStatus = isPassed ? 'CI Pipeline Passed' : 'CI Pipeline Failed'
+                
+                // Get commit SHA (first 7 characters)
+                def commitSha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+                
+                // Get repository name from GIT_URL
+                def repoName = env.GIT_URL ? env.GIT_URL.replaceAll(/^.*[\/:]([^\/]+\/[^\/]+?)(\.git)?$/, '$1') : env.JOB_NAME
+                
+                // Build notification message
+                def message = """${statusEmoji} ${pipelineStatus}
 
-            // Publish Allure HTML report via HTML Publisher plugin
-            publishHTML(target: [
-                allowMissing         : true,
-                alwaysLinkToLastBuild: true,
-                keepAll              : true,
-                reportDir            : 'target/allure-html',
-                reportFiles          : 'index.html',
-                reportName           : 'Allure Report',
-                reportTitles         : 'Allure Report'
-            ])
+Repository: ${repoName}
+Branch: ${env.BRANCH_NAME ?: 'develop'}
+Commit: ${commitSha}
+Status: ${statusText}
 
-            // Clean up the CI image to avoid disk bloat
-            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} || true"
-        }
+Run Details:
+${env.BUILD_URL}console
 
-        success {
-            slackSend(
-                channel: env.SLACK_CHANNEL,
-                color: 'good',
-                message: """
-                    *BUILD PASSED* :white_check_mark:
-                    *Job:* ${env.JOB_NAME}
-                    *Build:* #${env.BUILD_NUMBER}
-                    *Allure Report:* ${env.BUILD_URL}Allure_Report/
-                """.stripIndent().trim()
-            )
-
-            mail(
-                to: 'nksarps@gmail.com',
-                subject: "PASSED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Build passed.\n\nJob: ${env.JOB_NAME}\nBuild: #${env.BUILD_NUMBER}\nAllure Report: ${env.BUILD_URL}Allure_Report/"
-            )
-        }
-
-        failure {
-            slackSend(
-                channel: env.SLACK_CHANNEL,
-                color: 'danger',
-                message: """
-                    *BUILD FAILED* :x:
-                    *Job:* ${env.JOB_NAME}
-                    *Build:* #${env.BUILD_NUMBER}
-                    *Logs:* ${env.BUILD_URL}console
-                    *Allure Report:* ${env.BUILD_URL}Allure_Report/
-                """.stripIndent().trim()
-            )
-
-            mail(
-                to: 'nksarps@gmail.com',
-                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Build failed.\n\nJob: ${env.JOB_NAME}\nBuild: #${env.BUILD_NUMBER}\nLogs: ${env.BUILD_URL}console\nAllure Report: ${env.BUILD_URL}Allure_Report/"
-            )
+Allure Report:
+${env.BUILD_URL}allure/
+""".stripIndent().trim()
+                
+                // Slack Notification
+                slackSend(
+                    channel: env.SLACK_CHANNEL,
+                    color: color,
+                    message: message
+                )
+                
+                // Email Notification
+                emailext(
+                    subject: "CI ${statusEmoji} ${statusText}: ${repoName}",
+                    body: message,
+                    to: 'nksarps@gmail.com',
+                    recipientProviders: [culprits(), developers(), upstreamDevelopers()]
+                )
+            }
         }
 
     }
