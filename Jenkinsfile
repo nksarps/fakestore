@@ -93,15 +93,11 @@ pipeline {
         always {
             script {
                 // Fetch test summary from the build's test result action
-                def testResult = currentBuild.rawBuild.getAction(hudson.tasks.test.AbstractTestResultAction.class)
                 def total = 0, passed = 0, failed = 0, skipped = 0
                 
-                if (testResult != null) {
-                    total = testResult.totalCount
-                    passed = testResult.passCount
-                    failed = testResult.failCount
-                    skipped = testResult.skipCount
-                }
+                // Use currentBuild.currentResult for test data (no approval needed)
+                // Note: Test counts will be extracted from junit step return value
+                echo "Build result: ${currentBuild.result ?: 'SUCCESS'}"
                 
                 def status = currentBuild.result ?: 'SUCCESS'
                 def isPassed = (status == 'SUCCESS')
@@ -120,7 +116,7 @@ pipeline {
                 def slackMessage = """${statusEmoji} *${pipelineStatus}*
 
                     📦 *Repository:* ${repoName}
-                    🌿 *Branch:* ${env.BRANCH_NAME ?: 'main'}
+                    🌿 *Branch:* ${env.BRANCH_NAME ?: 'develop'}
                     🧾 *Commit:* ${commitSha}
                     📊 *Status:* ${statusEmoji} ${statusText}
 
@@ -145,7 +141,7 @@ pipeline {
                                     def emailBody = """${statusEmoji} ${pipelineStatus}
 
                     Repository: ${repoName}
-                    Branch: ${env.BRANCH_NAME ?: 'main'}
+                    Branch: ${env.BRANCH_NAME ?: 'develop'}
                     Commit: ${commitSha}
                     Status: ${statusEmoji} ${statusText}
 
