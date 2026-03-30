@@ -46,7 +46,7 @@ pipeline {
                         # Surefire XML results for JUnit plugin
                         docker cp ${CONTAINER_NAME}:/app/target/surefire-reports ./target/surefire-reports || true
 
-                        # Allure raw results for Allure plugin
+                        # Allure raw results for Allure plugin (JSON files, not HTML)
                         docker cp ${CONTAINER_NAME}:/app/target/allure-results ./target/allure-results || true
 
                         # Test exit code written by the Docker RUN step
@@ -55,12 +55,13 @@ pipeline {
                         docker rm ${CONTAINER_NAME}
                     """
 
-                    // Fail the build if tests failed, but only after reports are extracted
+                    // Mark build as unstable if tests failed, but don't stop execution
                     def testExitFile = 'test-exit-code'
                     if (fileExists(testExitFile)) {
                         def testExit = readFile(testExitFile).trim()
                         if (testExit != '0') {
                             currentBuild.result = 'UNSTABLE'
+                            echo "Tests failed with exit code ${testExit}, but continuing to publish reports"
                         }
                     }
                 }
@@ -76,7 +77,13 @@ pipeline {
             junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
 
             // Publish Allure report using Allure plugin
-            allure results: [[path: 'target/allure-results']]
+            allure([
+                includeProperties: false,
+                jdk: '',
+                commandline: 'allure',
+                results: [[path: 'target/allure-results']],
+                reportBuildPolicy: 'ALWAYS'
+            ])
 
             // Clean up the CI image to avoid disk bloat
             sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} || true"
