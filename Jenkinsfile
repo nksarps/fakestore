@@ -100,13 +100,6 @@ pipeline {
 
         always {
             script {
-                // Fetch test summary from the build's test result action
-                def total = 0, passed = 0, failed = 0, skipped = 0
-                
-                // Use currentBuild.currentResult for test data (no approval needed)
-                // Note: Test counts will be extracted from junit step return value
-                echo "Build result: ${currentBuild.result ?: 'SUCCESS'}"
-                
                 def status = currentBuild.result ?: 'SUCCESS'
                 def isPassed = (status == 'SUCCESS')
                 def color = isPassed ? 'good' : (status == 'UNSTABLE' ? 'warning' : 'danger')
@@ -120,38 +113,13 @@ pipeline {
                 // Get repository name from GIT_URL
                 def repoName = env.GIT_URL ? env.GIT_URL.replaceAll(/^.*[\/:]([^\/]+\/[^\/]+?)(\.git)?$/, '$1') : env.JOB_NAME
                 
-                // Build Slack message
-                def slackMessage = """${statusEmoji} *${pipelineStatus}*
-
-📦 *Repository:* ${repoName}
-🌿 *Branch:* ${env.BRANCH_NAME ?: 'develop'}
-🧾 *Commit:* ${commitSha}
-📊 *Status:* ${statusEmoji} ${statusText}
-
-━━━━━━━━━━━━━━━━━━
-*Test Summary*
-• Total Tests: ${total}
-• Passed: ${passed}
-• Failed: ${failed}
-• Skipped: ${skipped}
-━━━━━━━━━━━━━━━━━━
-
-${isPassed ? '✅ All Tests Passed' : '🚨 Tests Failed'}
-
-*Run Details:*
-${env.BUILD_URL}console
-
-*Allure Report:*
-${env.BUILD_URL}allure/
-""".stripIndent().trim()
-
-                // Build email body (plain text version)
-                def emailBody = """${statusEmoji} ${pipelineStatus}
+                // Build notification message
+                def message = """${statusEmoji} ${pipelineStatus}
 
 Repository: ${repoName}
 Branch: ${env.BRANCH_NAME ?: 'develop'}
 Commit: ${commitSha}
-Status: ${statusEmoji} ${statusText}
+Status: ${statusText}
 
 Run Details:
 ${env.BUILD_URL}console
@@ -164,13 +132,13 @@ ${env.BUILD_URL}allure/
                 slackSend(
                     channel: env.SLACK_CHANNEL,
                     color: color,
-                    message: slackMessage
+                    message: message
                 )
                 
                 // Email Notification
                 emailext(
                     subject: "CI ${statusEmoji} ${statusText}: ${repoName}",
-                    body: emailBody,
+                    body: message,
                     to: 'nksarps@gmail.com',
                     recipientProviders: [culprits(), developers(), upstreamDevelopers()]
                 )
