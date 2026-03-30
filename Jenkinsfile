@@ -100,12 +100,16 @@ pipeline {
 
         always {
             script {
-                // Fetch test summary from the build's test result action
+                // Fetch test summary from JUnit results
+                def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
                 def total = 0, passed = 0, failed = 0, skipped = 0
                 
-                // Use currentBuild.currentResult for test data (no approval needed)
-                // Note: Test counts will be extracted from junit step return value
-                echo "Build result: ${currentBuild.result ?: 'SUCCESS'}"
+                if (testResultAction != null) {
+                    total = testResultAction.totalCount
+                    failed = testResultAction.failCount
+                    skipped = testResultAction.skipCount
+                    passed = total - failed - skipped
+                }
                 
                 def status = currentBuild.result ?: 'SUCCESS'
                 def isPassed = (status == 'SUCCESS')
