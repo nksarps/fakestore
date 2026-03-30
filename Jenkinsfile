@@ -41,6 +41,9 @@ pipeline {
                         echo "Tests failed, but continuing to generate reports..."
                         currentBuild.result = 'UNSTABLE'
                     }
+                    
+                    // Generate Allure report while still in Maven container
+                    sh 'mvn allure:report'
                 }
             }
             post {
@@ -48,7 +51,7 @@ pipeline {
                     // Copy any root-level allure-results into target/ as a fallback
                     sh 'if [ -d allure-results ]; then mkdir -p target/allure-results && cp -r allure-results/* target/allure-results/; fi'
                     
-                    stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
+                    stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**, target/site/allure-maven-plugin/**'
                     
                     // Apply full permissions so Jenkins can clean up root-owned files
                     sh 'chmod -R 777 ${WORKSPACE}'
@@ -64,17 +67,12 @@ pipeline {
                 
                 unstash 'results'
                 
-                // Generate Allure report using pre-installed version
-                sh '''
-                    .allure/allure-2.20.1/bin/allure generate target/allure-results -o target/allure-report --clean
-                '''
-                
-                // Publish the generated HTML report
+                // Publish pre-generated Allure HTML report
                 publishHTML([
                     allowMissing: false,
                     alwaysLinkToLastBuild: true,
                     keepAll: true,
-                    reportDir: 'target/allure-report',
+                    reportDir: 'target/site/allure-maven-plugin',
                     reportFiles: 'index.html',
                     reportName: 'Allure Report'
                 ])
