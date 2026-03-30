@@ -64,13 +64,19 @@ pipeline {
                 
                 unstash 'results'
                 
-                // Publish Allure report using Allure plugin
-                allure([
-                    includeProperties: false,
-                    jdk: '',
-                    commandline: 'allure',
-                    results: [[path: 'target/allure-results']],
-                    reportBuildPolicy: 'ALWAYS'
+                // Generate Allure report using pre-installed version
+                sh '''
+                    .allure/allure-2.20.1/bin/allure generate target/allure-results -o target/allure-report --clean
+                '''
+                
+                // Publish the generated HTML report
+                publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'target/allure-report',
+                    reportFiles: 'index.html',
+                    reportName: 'Allure Report'
                 ])
                 
                 // Publish JUnit XML results
