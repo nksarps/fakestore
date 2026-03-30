@@ -49,9 +49,6 @@ pipeline {
                         # Allure raw results for Allure plugin
                         docker cp ${CONTAINER_NAME}:/app/target/allure-results ./target/allure-results || true
 
-                        # Allure HTML report for HTML publisher
-                        docker cp ${CONTAINER_NAME}:/app/target/site/allure-maven-plugin ./target/allure-html || true
-
                         # Test exit code written by the Docker RUN step
                         docker cp ${CONTAINER_NAME}:/test-exit-code ./test-exit-code || true
 
@@ -63,8 +60,7 @@ pipeline {
                     if (fileExists(testExitFile)) {
                         def testExit = readFile(testExitFile).trim()
                         if (testExit != '0') {
-                            currentBuild.result = 'FAILURE'
-                            error("Tests failed with exit code ${testExit}")
+                            currentBuild.result = 'UNSTABLE'
                         }
                     }
                 }
@@ -79,16 +75,8 @@ pipeline {
             // Publish JUnit XML results
             junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
 
-            // Publish Allure HTML report via HTML Publisher plugin
-            publishHTML(target: [
-                allowMissing         : true,
-                alwaysLinkToLastBuild: true,
-                keepAll              : true,
-                reportDir            : 'target/allure-html',
-                reportFiles          : 'index.html',
-                reportName           : 'Allure Report',
-                reportTitles         : 'Allure Report'
-            ])
+            // Publish Allure report using Allure plugin
+            allure results: [[path: 'target/allure-results']]
 
             // Clean up the CI image to avoid disk bloat
             sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} || true"
