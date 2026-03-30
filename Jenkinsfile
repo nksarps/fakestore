@@ -33,7 +33,15 @@ pipeline {
                 }
             }
             steps {
-                sh 'mvn clean test'
+                script {
+                    // Catch test failures but continue pipeline
+                    try {
+                        sh 'mvn clean test'
+                    } catch (Exception e) {
+                        echo "Tests failed, but continuing to generate reports..."
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
             }
             post {
                 always {
@@ -115,52 +123,52 @@ pipeline {
                 // Build Slack message
                 def slackMessage = """${statusEmoji} *${pipelineStatus}*
 
-                    📦 *Repository:* ${repoName}
-                    🌿 *Branch:* ${env.BRANCH_NAME ?: 'develop'}
-                    🧾 *Commit:* ${commitSha}
-                    📊 *Status:* ${statusEmoji} ${statusText}
+📦 *Repository:* ${repoName}
+🌿 *Branch:* ${env.BRANCH_NAME ?: 'develop'}
+🧾 *Commit:* ${commitSha}
+📊 *Status:* ${statusEmoji} ${statusText}
 
-                    ━━━━━━━━━━━━━━━━━━
-                    *Test Summary*
-                    • Total Tests: ${total}
-                    • Passed: ${passed}
-                    • Failed: ${failed}
-                    • Skipped: ${skipped}
-                    ━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
+*Test Summary*
+• Total Tests: ${total}
+• Passed: ${passed}
+• Failed: ${failed}
+• Skipped: ${skipped}
+━━━━━━━━━━━━━━━━━━
 
-                    ${isPassed ? '✅ All Tests Passed' : '🚨 Tests Failed'}
+${isPassed ? '✅ All Tests Passed' : '🚨 Tests Failed'}
 
-                    *Run Details:*
-                    ${env.BUILD_URL}console
+*Run Details:*
+${env.BUILD_URL}console
 
-                    *Allure Report:*
-                    ${env.BUILD_URL}allure/
-                    """.stripIndent().trim()
+*Allure Report:*
+${env.BUILD_URL}allure/
+""".stripIndent().trim()
 
-                                    // Build email body (plain text version)
-                                    def emailBody = """${statusEmoji} ${pipelineStatus}
+                // Build email body (plain text version)
+                def emailBody = """${statusEmoji} ${pipelineStatus}
 
-                    Repository: ${repoName}
-                    Branch: ${env.BRANCH_NAME ?: 'develop'}
-                    Commit: ${commitSha}
-                    Status: ${statusEmoji} ${statusText}
+Repository: ${repoName}
+Branch: ${env.BRANCH_NAME ?: 'develop'}
+Commit: ${commitSha}
+Status: ${statusEmoji} ${statusText}
 
-                    ━━━━━━━━━━━━━━━━━━
-                    Test Summary
-                    • Total Tests: ${total}
-                    • Passed: ${passed}
-                    • Failed: ${failed}
-                    • Skipped: ${skipped}
-                    ━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
+Test Summary
+• Total Tests: ${total}
+• Passed: ${passed}
+• Failed: ${failed}
+• Skipped: ${skipped}
+━━━━━━━━━━━━━━━━━━
 
-                    ${isPassed ? 'All Tests Passed' : 'Tests Failed'}
+${isPassed ? 'All Tests Passed' : 'Tests Failed'}
 
-                    Run Details:
-                    ${env.BUILD_URL}console
+Run Details:
+${env.BUILD_URL}console
 
-                    Allure Report:
-                    ${env.BUILD_URL}allure/
-                    """.stripIndent().trim()
+Allure Report:
+${env.BUILD_URL}allure/
+""".stripIndent().trim()
                 
                 // Slack Notification
                 slackSend(
