@@ -102,7 +102,7 @@ pipeline {
                     // This is necessary because the Docker container ran as root and created files owned by root
                     sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
                 }
-            }ei 
+            }
         }
 
     }
