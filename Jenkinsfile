@@ -2,7 +2,9 @@ pipeline {
     agent any
 
     options {
+        // Keep only the last 10 builds to save disk space
         buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Prevent multiple concurrent builds of the same pipeline to avoid conflicts with shared resources
         disableConcurrentBuilds()
         timestamps()
         timeout(time: 30, unit: 'MINUTES')
@@ -21,12 +23,15 @@ pipeline {
         stage('Checkout') {
             agent any
             steps {
+                // Checkout using Jenkins' built-in SCM support
                 checkout scm
             }
         }
 
         stage('Test') {
             agent {
+                // Override default agent to run tests in a Docker container with Maven and Java 17
+                // Args '-u root' allows the container to write files as root, which is necessary for generating reports without permission issues
                 docker {
                     image 'maven:3.9.5-eclipse-temurin-17-alpine'
                     args '-u root'
@@ -39,15 +44,17 @@ pipeline {
                         sh 'mvn clean test'
                     } catch (Exception e) {
                         echo "Tests failed, but continuing to generate reports..."
+                        // Mark build as UNSTABLE instead of FAILURE to allow post steps to run
                         currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
             post {
                 always {
-                    // Copy any root-level allure-results into target/ as a fallback
+                    // Copy any root-level allure-results into target/allure-results for Jenkins
                     sh 'if [ -d allure-results ]; then mkdir -p target/allure-results && cp -r allure-results/* target/allure-results/; fi'
-                    
+
+                    // Save results for the next stage - include both Allure results and Surefire reports
                     stash name: 'results', includes: 'target/allure-results/**, target/surefire-reports/**'
                     
                     // Apply full permissions so Jenkins can clean up root-owned files
@@ -59,17 +66,20 @@ pipeline {
         stage('Reports') {
             agent any
             steps {
-                // Clean workspace before unstashing (ignore errors from previous root-owned files)
+                // Remove existing files before unstashing to avoid mixed/stale artifacts from previous runs
                 sh 'rm -rf ${WORKSPACE}/* ${WORKSPACE}/.[!.]* 2>/dev/null || true'
-                
+
+                // Restore results from the previous stage
                 unstash 'results'
                 
                 // Publish Allure report - uses pre-generated report from Maven
                 allure([
                     includeProperties: false,
+                    // Uses the default Allure command line tool installed on Jenkins, so no need to specify a JDK
                     jdk: '',
                     commandline: 'allure',
                     results: [[path: 'target/allure-results']],
+                    // Publish report after every run
                     reportBuildPolicy: 'ALWAYS'
                 ])
                 
@@ -88,10 +98,11 @@ pipeline {
             }
             post {
                 always {
-                    // Fix permissions so Jenkins can clean up
+                    // Fix permissions so Jenkins can clean up on next run
+                    // This is necessary because the Docker container ran as root and created files owned by root
                     sh 'chmod -R 777 ${WORKSPACE} 2>/dev/null || true'
                 }
-            }
+            }ei 
         }
 
     }
@@ -140,7 +151,6 @@ ${env.BUILD_URL}allure/
                     subject: "CI ${statusEmoji} ${statusText}: ${repoName}",
                     body: message,
                     to: 'nksarps@gmail.com',
-                    recipientProviders: [culprits(), developers(), upstreamDevelopers()]
                 )
             }
         }
