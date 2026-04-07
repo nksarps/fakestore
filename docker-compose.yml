@@ -1,10 +1,7 @@
 services:
-  fakestore-allure:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: serve
-    container_name: fakestore-allure
+  fakestore-tests:
+    build: .
     ports:
       - "8080:8080"
-    restart: unless-stopped
+    stdin_open: true
+    tty: true
